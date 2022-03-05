@@ -13,10 +13,15 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
 import lombok.RequiredArgsConstructor;
 
 import static com.amigoscode.security.ApplicationUserRole.*;
+
+import java.util.concurrent.TimeUnit;
+
 import static com.amigoscode.security.ApplicationUserPermission.*;
 
 @Configuration
@@ -30,18 +35,33 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
 	@Override
 	protected void configure(HttpSecurity http) throws Exception {
 		http
-//			.csrf().disable() // -> Cross Site Request Forgery (csrf)
+//			.csrf().csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+//			.and()
+			.csrf().disable()
 			.authorizeRequests()
 			.antMatchers("/", "index", "/css/*", "/js/*").permitAll()
 			.antMatchers("/api/**").hasRole(STUDENT.name())
-//			.antMatchers(HttpMethod.DELETE, "/management/api/**").hasAuthority(COURSE_WRITE.getPermission())
-//			.antMatchers(HttpMethod.POST, "/management/api/**").hasAuthority(COURSE_WRITE.getPermission())
-//			.antMatchers(HttpMethod.PUT, "/management/api/**").hasAuthority(COURSE_WRITE.getPermission())
-//			.antMatchers(HttpMethod.GET, "/management/api/**").hasAnyRole(ADMIN.name(), ADMINTRAINEE.name())
 			.anyRequest()
 			.authenticated()
 			.and()
-			.httpBasic();
+			.formLogin()
+				.loginPage("/login").permitAll()
+				.defaultSuccessUrl("/courses", true)
+				.passwordParameter("password") // if we like to change it
+				.usernameParameter("username")
+			.and()
+			.rememberMe()
+				.tokenValiditySeconds((int) TimeUnit.DAYS.toSeconds(21))
+				.key("SOMETHINGVERYSECURED")
+				.rememberMeParameter("remember-me")
+			.and()
+			.logout()
+				.logoutUrl("/logout")
+				.logoutRequestMatcher(new AntPathRequestMatcher("/logout", "GET"))
+				.clearAuthentication(true)
+				.invalidateHttpSession(true)
+				.deleteCookies("JSESSIONID", "remember-me")
+				.logoutSuccessUrl("/login"); // default 2 weeks
 	}
 
 	@Override
@@ -71,8 +91,5 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
 		return new InMemoryUserDetailsManager(annaSmithUser, lindaUser, tomUser);
 		
 	}
-	
-	
-	
-	
+
 }
