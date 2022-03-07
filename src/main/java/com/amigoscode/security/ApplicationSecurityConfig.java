@@ -10,6 +10,7 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -19,6 +20,9 @@ import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
 import com.amigoscode.auth.ApplicationUserService;
+import com.amigoscode.jwt.JwtConfig;
+import com.amigoscode.jwt.JwtTokenVerifier;
+import com.amigoscode.jwt.JwtUsernameAndPasswordAuthenticationFilter;
 
 import lombok.RequiredArgsConstructor;
 
@@ -26,47 +30,36 @@ import static com.amigoscode.security.ApplicationUserRole.*;
 
 import java.util.concurrent.TimeUnit;
 
+import javax.crypto.SecretKey;
+
 import static com.amigoscode.security.ApplicationUserPermission.*;
 
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
 @EnableGlobalMethodSecurity(prePostEnabled = true)
-public class SecurityConfig extends WebSecurityConfigurerAdapter {
+public class ApplicationSecurityConfig extends WebSecurityConfigurerAdapter {
 	
 	private final PasswordEncoder passwordEncoder;
 	private final ApplicationUserService applicationUserService;
+	private final SecretKey secretKey;
+	private final JwtConfig jwtConfig;
 	
 	@Override
 	protected void configure(HttpSecurity http) throws Exception {
 		http
-//			.csrf().csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
-//			.and()
 			.csrf().disable()
+			.sessionManagement()
+				.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+			.and()
+			.addFilter(new JwtUsernameAndPasswordAuthenticationFilter(authenticationManager(), jwtConfig, secretKey))
+			.addFilterAfter(new JwtTokenVerifier(secretKey, jwtConfig), JwtUsernameAndPasswordAuthenticationFilter.class)
 			.authorizeRequests()
 			.antMatchers("/", "index", "/css/*", "/js/*").permitAll()
 			.antMatchers("/api/**").hasRole(STUDENT.name())
 			.anyRequest()
-			.authenticated()
-			.and()
-			.formLogin()
-				.loginPage("/login").permitAll()
-				.defaultSuccessUrl("/courses", true)
-				.passwordParameter("password") // if we like to change it
-				.usernameParameter("username")
-			.and()
-			.rememberMe()
-				.tokenValiditySeconds((int) TimeUnit.DAYS.toSeconds(21))
-				.key("SOMETHINGVERYSECURED")
-				.rememberMeParameter("remember-me")
-			.and()
-			.logout()
-				.logoutUrl("/logout")
-				.logoutRequestMatcher(new AntPathRequestMatcher("/logout", "GET"))
-				.clearAuthentication(true)
-				.invalidateHttpSession(true)
-				.deleteCookies("JSESSIONID", "remember-me")
-				.logoutSuccessUrl("/login"); // default 2 weeks
+			.authenticated();
+			
 	}
 
 	@Override
